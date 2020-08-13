@@ -12,14 +12,6 @@ import com.qualcomm.ftccommon.SoundPlayer;
 import org.firstinspires.ftc.robotcore.external.android.AndroidSoundPool;
 import org.firstinspires.ftc.robotcore.external.android.AndroidTextToSpeech;
 
-// TensorFlow
-import java.util.List;
-
-import org.firstinspires.ftc.robotcore.external.tfod.Recognition;
-import org.firstinspires.ftc.robotcore.external.navigation.VuforiaLocalizer;
-import org.firstinspires.ftc.robotcore.external.navigation.VuforiaRoverRuckus;
-import org.firstinspires.ftc.robotcore.external.tfod.TfodRoverRuckus;
-
 // Inertial Measurement Unit
 import com.qualcomm.hardware.bosch.BNO055IMU;
 import org.firstinspires.ftc.robotcore.external.navigation.Acceleration;
@@ -35,13 +27,10 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.hardware.TouchSensor;
 
-
 @TeleOp(name = "MobileLaunchVehicle", group = "")
-
 public class MobileLaunchVehicle extends LinearOpMode {
     private final static boolean DEBUG = false;
     private final static boolean VERBOSE = false;
-    private final static boolean TENSORFLOW = false;
     private final static boolean FULL_TIMING = false;
     private final static double PRECISION_LIMIT_DOUBLE = 0.000000000001;
 
@@ -156,7 +145,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
         public int getChange(boolean currentState) {
             if (currentState != lastState) {
                 lastState = currentState;
-                if (currentState) {      // 0: Changed to false, 1: Changed to true
+                if (currentState) {     // 0: Changed to false, 1: Changed to true
                     return 1;
                 } else {
                     return 0;
@@ -206,7 +195,8 @@ public class MobileLaunchVehicle extends LinearOpMode {
             if(countdownState == CountdownState.COUNTDOWN_COUNTING) {
                 nanoTimeRemaining = nanoTimeT - System.nanoTime();
                 if (nanoTimeRemaining < 0) {
-                    nanoTimeRemaining = 0;      // Should this also set COUNTDOWN_COMPLETE?
+                    // ToDo: This is arguably an error state. Should we do something more?
+                    nanoTimeRemaining = 0;
                 }
                 countdownState = CountdownState.COUNTDOWN_HOLDING;
                 return true;
@@ -253,8 +243,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
 
     }
 
-
-    public class ServoJoint {
+    public class RobotServo {
         private Servo servo;
         private double positionParked;      // Expected start position
         private double positionBase;        // Base position when operating.
@@ -270,15 +259,18 @@ public class MobileLaunchVehicle extends LinearOpMode {
         private long nanoTimePerDegree;
         private long nanoTimeIncrementAllowed;   // Insure that this is initialized at or below actual System.nanoTime().
         private long nanoTimeDecrementAllowed;   // Insure that this is initialized at or below actual System.nanoTime().
-        private long nanoTimeLast;              // Time of initiating last move.
+        private long nanoTimeLast;               // Time of initiating last move.
 
-        ServoJoint(Servo servo) {
+        RobotServo(Servo servo) {
+            // To Do: Should we continue to allow this, or should we require input parameters?
+
             // Default to park and base of 0, full range of motion, 180 degrees of motion, no adjust, and
             //   a very conservative (slow but safe) speed expectation.
-            this(servo, 0, 0, 0, 1, 0.00555555555, 0, 10000000);
+            this(servo, 0, 0, 0, 1, 0.00555555555,
+                    0, 10000000);
         }
 
-        ServoJoint(
+        RobotServo(
                 Servo servo, double positionParked, double positionBase, double positionMin, double positionMax,
                 double positionPerDegree, double positionAdjust, long nanoTimePerDegree) {
             this.servo = servo;
@@ -297,7 +289,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
             this.nanoTimeDecrementAllowed = Long.MIN_VALUE; // -9223372036854775808
 
             // Ideally set initial position on intsantiation. May not work unless constructed while opMode running.
-            this.servo.setPosition(positionParked);
+            // Doesn't work properly. Handle manually --> this.servo.setPosition(positionParked);
         }
 
         public void setPositionParked(double positionParked) {
@@ -396,12 +388,6 @@ public class MobileLaunchVehicle extends LinearOpMode {
             }
 
             newPosition = position - (positionPerDegree * degrees);
-            if (newPosition < positionMin) {
-                newPosition = positionMin;                      // Limit to positionMin.
-            } else if (newPosition > positionMax) {
-                newPosition = positionMax;                      // Limit to positionMax.
-            }
-
             setPosition(newPosition, nanoTimeCurrent);
             return true;
         }
@@ -411,6 +397,14 @@ public class MobileLaunchVehicle extends LinearOpMode {
         }
 
         public void setPosition(double position, long nanoTimeCurrent) {
+            // This is the final step before moving the servo. So handle all limits and adjust here.
+            position += positionAdjust;             // Add in offset for fine tuning around gear positions.
+            if (position < positionMin) {
+                position = positionMin;             // Limit to positionMin.
+            } else if (position > positionMax) {
+                position = positionMax;             // Limit to positionMax.
+            }
+
             positionLast = positionEstimate(nanoTimeCurrent);
             if(position > positionLast) {
                 nanoTimeIncrementAllowed = nanoTimeCurrent +
@@ -421,6 +415,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
                 nanoTimeDecrementAllowed = nanoTimeCurrent +
                         (long)((positionLast - position) / positionPerDegree) * nanoTimePerDegree;
             }
+
 
             nanoTimeLast = nanoTimeCurrent;
             servo.setPosition(position);
@@ -455,29 +450,29 @@ public class MobileLaunchVehicle extends LinearOpMode {
     }
 
     public class RobotArm {
-        ServoJoint waist;
-        ServoJoint shoulder;
+        RobotServo waist;
+        RobotServo shoulder;
 
         public RobotArm() {
-            this.waist = new ServoJoint(
+            this.waist = new RobotServo(
                     hardwareMap.servo.get("serv4"),
-                    0.5, 0.5, 0.0, 1.0, 0.00175, -0.0025, (long)5000000);
+                    0.5, 0.5, 0.0, 1.0, 0.00175, 0.0, (long)5000000);
 
             // Horizontal: 0.5038, Vertical: 0.21885, 15 degrees (untested): 0.4088.
-            this.shoulder = new ServoJoint(
+            this.shoulder = new RobotServo(
                     hardwareMap.servo.get("serv5"),
                     0.4563, 0.21885, 0.16, 0.5038, 0.003166, 0.0, (long)7500000);
 
-            // ServoJoint elbow = new ServoJoint(
+            // RobotServo elbow = new RobotServo(
             //         hardwareMap.servo.get("serv3"), 0.5, 0.315, 0, 1, 0.00175, -0.0025, (long)5000000);
 
-            // ServoJoint forearm = new ServoJoint(
+            // RobotServo forearm = new RobotServo(
             //         hardwareMap.servo.get("serv2"), 0.5, 0.315, 0, 1, 0.00175, -0.0025, 5000000);
 
-            // ServoJoint wrist = new ServoJoint(
+            // RobotServo wrist = new RobotServo(
             //         hardwareMap.servo.get("serv <Need New Hub (more servos) for this> "), 0.5, 0.315, 0, 1, 0.00175, -0.0025, 5000000);
 
-            // ServoJoint claw = new ServoJoint(
+            // RobotServo claw = new RobotServo(
             //         hardwareMap.servo.get("serv1"), 0.5, 0.315, 0, 1, 0.00175, -0.0025, 5000000);
         }
 
@@ -515,21 +510,14 @@ public class MobileLaunchVehicle extends LinearOpMode {
     }
 
     //Time
-//    private LocalTime zeroHour = LocalTime.now();
+    // private LocalTime zeroHour = LocalTime.now();
     // private Duration  countDownClock = Duration.of(30,SECONDS);
 
     // Audio
-//    private AndroidTextToSpeech androidTextToSpeech = new AndroidTextToSpeech();
     private Voice voice = new Voice();
     private AndroidSoundPool androidSoundPool = new AndroidSoundPool();
 
     private Countdown countdown = new Countdown(70);
-
-    // Tensorflow
-    // TODO: Debug this... Why is my if statement disallowed?
-    //    if(TENSORFLOW)  {
-    private VuforiaRoverRuckus vuforiaRoverRuckus = new VuforiaRoverRuckus();
-    private TfodRoverRuckus tfodRoverRuckus = new TfodRoverRuckus();
 
     private List<Recognition> recognitions;
     private double goldMineralX;
@@ -544,9 +532,6 @@ public class MobileLaunchVehicle extends LinearOpMode {
     private BNO055IMU imu;
 
     Speed speed = Speed.SPEED_TWO;
-
-//    private Servo servDozer;
-//    Dozer dozer = Dozer.DOZER_RETRACTED;
 
     private DcMotor rearLeft;
     private DcMotor rearRight;
@@ -563,8 +548,8 @@ public class MobileLaunchVehicle extends LinearOpMode {
     Trigger oneLeftBumper       = new Trigger(false);   // Deploy arm.
     Trigger oneRightBumper      = new Trigger(false);   // Park arm.
     Trigger oneBack             = new Trigger(false);   // Arm demo
-    Trigger oneDPadLeft         = new Trigger(false);   //  Dozer up.
-    Trigger oneDPadRight        = new Trigger(false);   //  Dozer down.
+    Trigger oneDPadLeft         = new Trigger(false);   // .
+    Trigger oneDPadRight        = new Trigger(false);   // .
     Trigger oneDPadUp           = new Trigger(false);   //  Speed up.
     Trigger oneDPadDown         = new Trigger(false);   //  Speed down.
 
@@ -599,11 +584,10 @@ public class MobileLaunchVehicle extends LinearOpMode {
         } else {
 
             // TODO: FInd out why "SetFlag() GetFlag() are not working. GetFlag alweays returns true.
-
-//            if(countdown.getFlag()) {
-//                voice.speak("yo", true);
-//                countdown.setFlag(100000);
-//            }
+//          if(countdown.getFlag()) {
+//              voice.speak("yo", true);
+//              countdown.setFlag(100000);
+//          }
         }
         return 0;
     }
@@ -611,17 +595,8 @@ public class MobileLaunchVehicle extends LinearOpMode {
     @Override
     public void runOpMode() {
         // Audio
-//        androidTextToSpeech.initialize();
+        // androidTextToSpeech.initialize();
         androidSoundPool.initialize(SoundPlayer.getInstance());
-
-        if (TENSORFLOW) {
-            // Tensorflow
-            vuforiaRoverRuckus.initialize("", VuforiaLocalizer.CameraDirection.BACK,
-                    true, false, VuforiaLocalizer.Parameters.CameraMonitorFeedback.AXES,
-                    0, 0, 0, 0, 0, 0, true);
-            tfodRoverRuckus.initialize(vuforiaRoverRuckus, 0.4f, true, true);
-            tfodRoverRuckus.activate();
-        }
 
         // IMU
         BNO055IMU.Parameters imuParameters;
@@ -643,27 +618,21 @@ public class MobileLaunchVehicle extends LinearOpMode {
         // Arm Servos
         RobotArm robotArm = new RobotArm();
 
-
-
-//        servDozer = hardwareMap.servo.get("serv0");
-//        servDozer.setPosition(dozer.position);
-//        voice.speak(dozer.description);
-
-        ServoJoint servLaunchEnable = new ServoJoint(
+        RobotServo servLaunchMaster = new RobotServo(
                 hardwareMap.servo.get("serv0"),
-                0.20, 0.03, 0.0, 1.0, 0.00175, -0.0025, (long)5000000);
-        ServoJoint servLaunch1 = new ServoJoint(
+                0.20, 0.03, 0.0, 1.0, 0.00175, -0.03, (long)5000000);
+        RobotServo servLaunch1 = new RobotServo(
                 hardwareMap.servo.get("serv1"),
-                0.20, 0.03, 0.0, 1.0, 0.00175, -0.0025, (long)5000000);
-        ServoJoint servLaunch2 = new ServoJoint(
+                0.20, 0.03, 0.0, 1.0, 0.00175, -0.00, (long)5000000);
+        RobotServo servLaunch2 = new RobotServo(
                 hardwareMap.servo.get("serv2"),
-                0.20, 0.03, 0.0, 1.0, 0.00175, -0.0025, (long)5000000);
-        ServoJoint servLaunch3 = new ServoJoint(
+                0.20, 0.03, 0.0, 1.0, 0.00175, -0.03, (long)5000000);
+        RobotServo servLaunch3 = new RobotServo(
                 hardwareMap.servo.get("serv3"),
-                0.20, 0.03, 0.0, 1.0, 0.00175, -0.0025, (long)5000000);
+                0.20, 0.03, 0.0, 1.0, 0.00175, 0.01, (long)5000000);
 
         // Should park on init, but make sure here.
-        servLaunchEnable.toPark();
+        servLaunchMaster.toPark();
         servLaunch1.toPark();
         servLaunch2.toPark();
         servLaunch3.toPark();
@@ -702,8 +671,6 @@ public class MobileLaunchVehicle extends LinearOpMode {
         int lastSecondReported = 0;
         int currentSecond = 0;
 
-
-
         waitForStart();
 
         androidSoundPool.setVolume(1F);
@@ -717,13 +684,15 @@ public class MobileLaunchVehicle extends LinearOpMode {
         // RUN_WITHOUT_ENCODER is the least complex and least sophisticated mode. It causes the motors to simply be
         // controlled by power input to them. Note that 50% power does not result in 50% speed or torque.
         // That said, this is most reliable in testing. Encoders seem to fail often.
+        //
+        // TO DO: Looks like work has been done on the encoders code. Maybe try again?
         rearLeft.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         rearRight.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         frontLeft.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         frontRight.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
 
         // RUN_USING_ENCODER causes the power value to translate to a speed. Need to test. I am not sure why this is
-        // not the norm. It should be more controllable than RUN_WITHOUT_CONTROLLER. Perhaps too much complexity?
+        // not the norm. It should be more controllable than RUN_WITHOUT_CONTROLLER.
         // rearLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         // rearRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         // frontLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
@@ -749,67 +718,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
             while (opModeIsActive()) {
                 nanoTimeIterationStart = System.nanoTime();
 
-                if (TENSORFLOW) {
-                    // ********************************************************************
-                    // Vuforia / TensorFlow stuff (Foundation... Not acted on yet.)
-                    // ********************************************************************
-                    // TODO: Break this into triggered function, or put on/off switch on it.
-                    if (nanoTimeIterationStart > timeNextCubeCheck) {   // Check every 1/2 second
-                        recognitions = tfodRoverRuckus.getRecognitions();
-                        telemetry.addData("# Objects Recognized", recognitions.size());
-                        if (recognitions.size() == 3) {
-                            goldMineralX = -1;
-                            silverMineral1X = -1;
-                            silverMineral2X = -1;
 
-                            for (Recognition recognition : recognitions) {
-                                if (recognition.getLabel().equals("Gold Mineral")) {
-                                    goldMineralX = recognition.getLeft();
-                                } else if (silverMineral1X == -1) {
-                                    silverMineral1X = recognition.getLeft();
-                                } else {
-                                    silverMineral2X = recognition.getLeft();
-                                }
-                            }
-
-                            // Make sure we found one gold mineral and two silver minerals.
-                            if (goldMineralX != -1 && silverMineral1X != -1 && silverMineral2X != -1) {
-                                if (goldMineralX < silverMineral1X && goldMineralX < silverMineral2X) {
-                                    thisCubeFound = 1;
-                                } else if (goldMineralX > silverMineral1X && goldMineralX > silverMineral2X) {
-                                    thisCubeFound = 3;
-                                } else {
-                                    thisCubeFound = 2;
-                                }
-                            }
-                        } else {
-                            thisCubeFound = -1;
-                        }
-
-                        if (thisCubeFound != lastCubeFound) {
-                            timeNextCubeCheck = nanoTimeIterationStart + 500000; // Half a second from (essentially) now.
-                            lastCubeFound = thisCubeFound;
-                            switch (thisCubeFound) {
-                                case 1:
-                                    telemetry.addData("Gold Mineral Position", "Left");
-                                    voice.speak("Left.");
-                                    break;
-                                case 2:
-                                    telemetry.addData("Gold Mineral Position", "Center");
-                                    voice.speak("Center.");
-                                    break;
-                                case 3:
-                                    telemetry.addData("Gold Mineral Position", "Right");
-                                    voice.speak("Right.");
-                                    break;
-                                default:
-                                    telemetry.addData("Gold Mineral Position", "Unknown");
-                                    voice.speak("Unknown.");
-
-                            }
-                        }
-                    }
-                }
 
                 // ********************************************************************
                 // Speed:
@@ -849,7 +758,6 @@ public class MobileLaunchVehicle extends LinearOpMode {
                 // Multi-axis Arm:
                 //   All directions relative to rear of the robot, from the robot's perspective.
                 // ********************************************************************
-
 // Disable manual arm control for now.
 //                if (gamepad1.right_stick_x != 0) {
 //                    robotArm.waist.positionIncrement(gamepad1.right_stick_x, nanoTimeIterationStart);
@@ -873,25 +781,8 @@ public class MobileLaunchVehicle extends LinearOpMode {
 //                    }
 //                }
 
-//                telemetry.addData("Waist", robotArm.waist.getCurrentPosition());
-//                telemetry.addData("Shoulder", robotArm.shoulder.getCurrentPosition());
-
-                // ********************************************************************
-                // Front-dozer:
-                // ********************************************************************
-//                if (launchSequenceStep == -1) {
-//                    if (oneDPadLeft.getChange(gamepad1.dpad_left) == 1 && dozer.place < 3) {
-//                        dozer = dozer.next();
-//                        servDozer.setPosition(dozer.position);
-//                        voice.speak(dozer.description);
-//                    }
-//
-//                    if (oneDPadRight.getChange(gamepad1.dpad_right) == 1 && dozer.place > 0) {
-//                        dozer = dozer.previous();
-//                        servDozer.setPosition(dozer.position);
-//                        voice.speak(dozer.description);
-//                    }
-//                }
+                telemetry.addData("Waist", robotArm.waist.getCurrentPosition());
+                telemetry.addData("Shoulder", robotArm.shoulder.getCurrentPosition());
 
                 // ********************************************************************
                 // Launch Sequence
@@ -955,7 +846,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
                         if (decision == 1) {
                             launchSequenceStep++;
                         } else if(decision == -1) {
-                            servLaunchEnable.toPark();
+                            servLaunchMaster.toPark();
                             servLaunch1.toPark();
                             servLaunch2.toPark();
                             servLaunch3.toPark();                        }
@@ -983,13 +874,13 @@ public class MobileLaunchVehicle extends LinearOpMode {
                         if (decision == 1) {
                             launchSequenceStep++;
                         } else if(decision == -1) {
-                            servLaunchEnable.toPark();
+                            servLaunchMaster.toPark();
                             servLaunch1.toPark();
                             servLaunch2.toPark();
                             servLaunch3.toPark();                        }
                         break;
                     case 11:
-                        servLaunchEnable.toBase();
+                        servLaunchMaster.toBase();
                         voice.speak("Independent launch power enabled. ", true);
                         countdown.setFlag(700);
                         launchSequenceStep++;
@@ -1011,7 +902,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
                         if (decision == 1) {
                             launchSequenceStep++;
                         } else if(decision == -1) {
-                            servLaunchEnable.toPark();
+                            servLaunchMaster.toPark();
                             servLaunch1.toPark();
                             servLaunch2.toPark();
                             servLaunch3.toPark();                        }
@@ -1076,7 +967,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
                         }
                         break;
                     case 20:
-                        servLaunchEnable.toPark();
+                        servLaunchMaster.toPark();
                         servLaunch1.toPark();
                         servLaunch2.toPark();
                         servLaunch3.toPark();
@@ -1159,15 +1050,6 @@ public class MobileLaunchVehicle extends LinearOpMode {
 
         }
 
-//        dozer = Dozer.DOZER_RETRACTED;
-//        servDozer.setPosition(dozer.position);
-//        // voice.speak(dozer.description, true);
-
-        if (TENSORFLOW) {
-            tfodRoverRuckus.deactivate();
-            vuforiaRoverRuckus.close();
-            tfodRoverRuckus.close();
-        }
 //        androidTextToSpeech.close();
         androidSoundPool.close();
 
