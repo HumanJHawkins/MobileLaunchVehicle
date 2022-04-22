@@ -1,6 +1,7 @@
 package org.firstinspires.ftc.teamcode;
 
 import java.lang.*;
+import org.firstinspires.ftc.robotcore.external.tfod.Recognition;
 import com.qualcomm.robotcore.util.Range;
 
 // Basic OpMode Requirements
@@ -486,7 +487,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
             androidTextToSpeech.initialize();
             androidTextToSpeech.setLanguageAndCountry("en", "US");
             sleep(500);
-            speak("Text to speech initialized. ", true);
+            speak("System started and paused.", true);
         }
 
         public void speak(String text) {
@@ -519,14 +520,14 @@ public class MobileLaunchVehicle extends LinearOpMode {
 
     private Countdown countdown = new Countdown(70);
 
-    private List<Recognition> recognitions;
-    private double goldMineralX;
-    private double silverMineral1X;
-    private double silverMineral2X;
-    // -1: None, 1: Left, 2: Center, 3: Right (TODO: Switch to enum for cube found)
-    private int lastCubeFound = -1;
-    private int thisCubeFound = -1;
-    //    }
+    // private List<Recognition> recognitions;
+    // private double goldMineralX;
+    // private double silverMineral1X;
+    // private double silverMineral2X;
+    // // -1: None, 1: Left, 2: Center, 3: Right (TODO: Switch to enum for cube found)
+    // private int lastCubeFound = -1;
+    // private int thisCubeFound = -1;
+    // //    }
 
     // IMU
     private BNO055IMU imu;
@@ -681,6 +682,11 @@ public class MobileLaunchVehicle extends LinearOpMode {
 //        androidTextToSpeech.setLanguageAndCountry("en", "US");
 //        androidTextToSpeech.speak("Let's roll!");
 
+        rearLeft.setDirection(DcMotor.Direction.REVERSE);
+        rearRight.setDirection(DcMotor.Direction.FORWARD);
+        frontLeft.setDirection(DcMotor.Direction.REVERSE);
+        frontRight.setDirection(DcMotor.Direction.FORWARD);
+
         // RUN_WITHOUT_ENCODER is the least complex and least sophisticated mode. It causes the motors to simply be
         // controlled by power input to them. Note that 50% power does not result in 50% speed or torque.
         // That said, this is most reliable in testing. Encoders seem to fail often.
@@ -715,10 +721,15 @@ public class MobileLaunchVehicle extends LinearOpMode {
 
         if (opModeIsActive()) {
             nanoTimeLoopStart = System.nanoTime();   // Initial loop time
+            boolean firstLoop = true;
+
             while (opModeIsActive()) {
                 nanoTimeIterationStart = System.nanoTime();
 
-
+                if(firstLoop) {
+                    firstLoop = false;
+                    voice.speak("Active. Awaiting launch sequence start.", true);
+                }
 
                 // ********************************************************************
                 // Speed:
@@ -736,8 +747,9 @@ public class MobileLaunchVehicle extends LinearOpMode {
                 }
 
                 // ********************************************************************
-                // Drive: Physical wiring handles left-right reversal, as well as
-                //   counterintuitive controller values.
+                // Drive: For compatability with inflexible "RUN_WITH_ENCODERS",
+                //   handle wheel reversal and odd y-axis values must be handled
+                //   in code (vs. via physical wiring).
                 // ********************************************************************
                 if (launchSequenceStep == -1) {          // if not in launch sequence
                     basePower = gamepad1.left_stick_y;
