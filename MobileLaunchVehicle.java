@@ -1,7 +1,6 @@
 package org.firstinspires.ftc.teamcode;
 
 import java.lang.*;
-import org.firstinspires.ftc.robotcore.external.tfod.Recognition;
 import com.qualcomm.robotcore.util.Range;
 
 // Basic OpMode Requirements
