@@ -1,7 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-// Demo of commits.
-
 import java.lang.*;
 import com.qualcomm.robotcore.util.Range;
 
@@ -368,7 +366,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
             double newPosition;
             // Position check is fast relative to time check. So do this first to avoid costly system time calls.
             if (degrees >= 0) {
-                if (position + PRECISION_LIMIT_DOUBLE > positionMax) {
+                if (DoubleUtil.greaterThanOrEqual(position, positionMax)) {
                     return false;
                 }    // If already at max.
 
@@ -378,7 +376,7 @@ public class MobileLaunchVehicle extends LinearOpMode {
                     return false;
                 }
             } else {
-                if (position - PRECISION_LIMIT_DOUBLE < positionMin) {
+                if (DoubleUtil.lessThanOrEqual(position, positionMin)) {
                     return false;
                 }    // If already at min.
 
