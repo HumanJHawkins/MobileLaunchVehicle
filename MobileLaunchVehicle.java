@@ -1,6 +1,5 @@
 package org.firstinspires.ftc.teamcode;
 
-import java.lang.*;
 import com.qualcomm.robotcore.util.Range;
 
 // Basic OpMode Requirements
