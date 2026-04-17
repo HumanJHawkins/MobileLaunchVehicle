@@ -1,25 +1,12 @@
+package org.firstinspires.ftc.teamcode;
+
 public enum Speed {
     SPEED_ZERO(0, 0, "Zero."),
-    SPEED_ONE(1, 0.20, "One.") {
-        @Override
-        // Disallow shifting to zero. (Can set to zero directly, but not by shifting.)
-        public Speed previous() {
-            return this;
-        }
-
-        ;
-    },
+    SPEED_ONE(1, 0.20, "One."),
     SPEED_TWO(2, 0.40, "Two."),
     SPEED_THREE(3, 0.60, "Three."),
     SPEED_FOUR(4, 0.80, "Four."),
-    SPEED_FIVE(5, 1.00, "Five.") {
-        @Override
-        public Speed next() {
-            return this;
-        }
-
-        ;
-    };
+    SPEED_FIVE(5, 1.00, "Five.");
 
     private final int speed;
     private final double powerFactor;
@@ -32,24 +19,27 @@ public enum Speed {
     }
 
     public Speed next() {
-        // No bounds checking required here, because the last instance overrides
-        return values()[ordinal() + 1];
+        // Clamp to the maximum index of the enum array
+        return values()[Math.min(values().length - 1, ordinal() + 1)];
     }
 
     public Speed previous() {
-        // No bounds checking required here, because the last instance overrides
+        // Cannot shift down into ZERO.
+        if (this == SPEED_ZERO || this == SPEED_ONE) {
+            return this;
+        }
         return values()[ordinal() - 1];
     }
 
-    private double speed() {
+    public int getSpeed() {
         return speed;
     }
 
-    private double powerFactor() {
+    public double getPowerFactor() {
         return powerFactor;
     }
 
-    private String description() {
+    public String getDescription() {
         return description;
     }
 }

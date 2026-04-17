@@ -31,10 +31,8 @@ public class MobileLaunchVehicle extends LinearOpMode {
     private final static boolean DEBUG = false;
     private final static boolean VERBOSE = false;
     private final static boolean FULL_TIMING = false;
-    private final static double PRECISION_LIMIT_DOUBLE = 0.000000000001;
 
     private void reportSequenceTime(long zeroTime) {
-
     }
 
     //Time
@@ -96,29 +94,22 @@ public class MobileLaunchVehicle extends LinearOpMode {
         if (gamepad1.a && gamepad1.b) {
             return abortLaunch();
         } else if (gamepad1.left_bumper && gamepad1.right_bumper && (oneX.getChange(gamepad1.x) == 1)) {
-            if(countdown.countdownState.state == 1) {
+            if(countdown.getCountdownState() == CountdownState.COUNTDOWN_COUNTING) {
                 voice.speak(decisionMaker + " reports, go for launch.", true);
-            } else if (countdown.countdownState.state == 0) {
-                countdown.countdownState = CountdownState.COUNTDOWN_COUNTING;
+            } else if (countdown.getCountdownState() == CountdownState.COUNTDOWN_HOLDING) {
+                countdown.resumeCountdown(); // Properly encapsulated
                 voice.speak(decisionMaker + " reports, go for launch. Resuming countdown.", true);
             }
             return 1;
         } else if (oneY.getChange(gamepad1.y) == 1) {
-            if(countdown.countdownState.state == 1) {
-                countdown.countdownState = CountdownState.COUNTDOWN_HOLDING;
+            if(countdown.getCountdownState() == CountdownState.COUNTDOWN_COUNTING) {
+                countdown.holdCountdown(); // Properly encapsulated
                 voice.speak(decisionSubject + " is no go. Hold countdown.", true);
                 countdown.setFlag(200);
             }
-        } else {
-
-            // TODO: FInd out why "SetFlag() GetFlag() are not working. GetFlag alweays returns true.
-//          if(countdown.getFlag()) {
-//              voice.speak("yo", true);
-//              countdown.setFlag(100000);
-//          }
         }
         return 0;
-    }
+    } 
 
     @Override
     public void runOpMode() {
@@ -148,16 +139,16 @@ public class MobileLaunchVehicle extends LinearOpMode {
         RobotArm robotArm = new RobotArm(hardwareMap, telemetry);
         
         RobotServo servLaunchMaster = new RobotServo(
-                hardwareMap.servo.get("serv0"),
+                hardwareMap.servo.get("serv0"), telemetry,
                 0.20, 0.03, 0.0, 1.0, 0.00175, -0.03, (long)5000000);
         RobotServo servLaunch1 = new RobotServo(
-                hardwareMap.servo.get("serv1"),
+                hardwareMap.servo.get("serv1"), telemetry,
                 0.20, 0.03, 0.0, 1.0, 0.00175, -0.00, (long)5000000);
         RobotServo servLaunch2 = new RobotServo(
-                hardwareMap.servo.get("serv2"),
+                hardwareMap.servo.get("serv2"), telemetry,
                 0.20, 0.03, 0.0, 1.0, 0.00175, -0.03, (long)5000000);
         RobotServo servLaunch3 = new RobotServo(
-                hardwareMap.servo.get("serv3"),
+                hardwareMap.servo.get("serv3"), telemetry,
                 0.20, 0.03, 0.0, 1.0, 0.00175, 0.01, (long)5000000);
 
         // Should park on init, but make sure here.
@@ -263,14 +254,14 @@ public class MobileLaunchVehicle extends LinearOpMode {
                 // Speed:
                 // ********************************************************************
                 if (launchSequenceStep == -1) {
-                    if (oneDPadUp.getChange(gamepad1.dpad_up) == 1 && speed.speed < 5) {
+                    if (oneDPadUp.getChange(gamepad1.dpad_up) == 1 && speed.getSpeed() < 5) {
                         speed = speed.next();
-                        voice.speak(speed.description);
+                        voice.speak(speed.getDescription());
                     }
 
-                    if (oneDPadDown.getChange(gamepad1.dpad_down) == 1 && speed.speed > 1) {
+                    if (oneDPadDown.getChange(gamepad1.dpad_down) == 1 && speed.getSpeed() > 1) {
                         speed = speed.previous();
-                        voice.speak(speed.description);
+                        voice.speak(speed.getDescription());
                     }
                 }
 
@@ -289,10 +280,10 @@ public class MobileLaunchVehicle extends LinearOpMode {
                 leftPower = basePower - turnPower;
                 rightPower = basePower + turnPower;
 
-                rearLeft.setPower(leftPower * speed.powerFactor);
-                frontLeft.setPower(leftPower * speed.powerFactor);
-                rearRight.setPower(rightPower * speed.powerFactor);
-                frontRight.setPower(rightPower * speed.powerFactor);
+                rearLeft.setPower(leftPower * speed.getPowerFactor());
+                frontLeft.setPower(leftPower * speed.getPowerFactor());
+                rearRight.setPower(rightPower * speed.getPowerFactor());
+                frontRight.setPower(rightPower * speed.getPowerFactor());
 
                 // ********************************************************************
                 // Multi-axis Arm:

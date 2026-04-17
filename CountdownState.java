@@ -1,20 +1,12 @@
-public enum CountdownState {
-    COUNTDOWN_HOLDING(0, "holding.") { // This position set in hardware.
-        @Override
-        public CountdownState previous() {
-            return this;    // there is no previous for first position.
-        };
-    },
-    COUNTDOWN_COUNTING(1, "counting."),
-    COUNTDOWN_COMPLETE(2, "complete.") {
-        @Override
-        public CountdownState next() {
-            return this;    // there is no next for last position up.
-        };
-    };
+package org.firstinspires.ftc.teamcode;
 
-    private final int state;
-    private final String description;
+public enum CountdownState {
+    COUNTDOWN_HOLDING(0, "holding."),
+    COUNTDOWN_COUNTING(1, "counting."),
+    COUNTDOWN_COMPLETE(2, "complete.");
+
+    public final int state;
+    public final String description;
 
     CountdownState(int state, String description) {
         this.state = state;
@@ -22,21 +14,20 @@ public enum CountdownState {
     }
 
     public CountdownState next() {
-        // No bounds checking required here, because the last instance overrides
-        return values()[ordinal() + 1];
+        // Clamp to the maximum index of the enum array
+        return values()[Math.min(values().length - 1, ordinal() + 1)];
     }
 
     public CountdownState previous() {
-        // No bounds checking required here, because the last instance overrides
-        return values()[ordinal() - 1];
+        // Clamp to a minimum index of 0
+        return values()[Math.max(0, ordinal() - 1)];
     }
-
-    private double state() {
+    
+    public int getState() {
         return state;
     }
 
-    private String description() {
+    public String getDescription() {
         return description;
     }
 }
-
